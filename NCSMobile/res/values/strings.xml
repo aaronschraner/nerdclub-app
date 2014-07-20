@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">NCS mobile</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="buttontxt">Click for free errors!</string>
+
+</resources>
