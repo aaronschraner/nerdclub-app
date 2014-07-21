@@ -4,5 +4,6 @@
     <string name="app_name">NCS mobile</string>
     <string name="hello_world">Hello world!</string>
     <string name="buttontxt">Click for free errors!</string>
+    <string name="button2txt">Click for MOAR errors!</string>
 
 </resources>
