@@ -55,20 +55,20 @@ public class MainActivity extends Activity
 			@Override
 			public void onClick(View v)
 			{
-				populateFields((String) tv.getText());
+				populateFields((String) tv.getText()); //assign force XML reparse to button
 				
 			}
-		}); // */
+		}); 
 	}
 	
-	public void getXmlFromServer() 
+	public void getXmlFromServer() //launch GET thread to retrieve XML 
 	{
 		Log.v("NCSMobile", "Deploying GET thread...");
 		Toast.makeText(this, "Refreshing content...", Toast.LENGTH_SHORT).show();
 		new MyTask().execute(sDataUrl);
 	}
 	
-	public void pushString(String string)
+	public void pushString(String string) //Called when GET thread completes, handles errors and publishes result
 	{
 		xmlText=string;
 		if(string==null)
@@ -83,117 +83,111 @@ public class MainActivity extends Activity
 		}
 		tv.setText(xmlText); //TODO: DEBUG UGLINESS
 	}
-	List<LogEntry> logEntries= new ArrayList<LogEntry>();
-	List<Player> players=new ArrayList<Player>();
-	public void populateFields(String xmlString)
+	List<LogEntry> logEntries= new ArrayList<LogEntry>(); //list of log entries extracted from XML
+	List<Player> players=new ArrayList<Player>(); //list of players extracted from XML
+	public void populateFields(String xmlString) //MASSIVE function to extract that^ data from the XML
 	{
 		//init XML reader
 		XmlPullParser parser = Xml.newPullParser();
-		String ns=null;
-		try 
+		String ns=null; //namespace
+		try //because things break
 		{
-			parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
-			parser.setInput(new StringReader(xmlString));
-			Log.v("Xml Parser", "Extracting XML data...");
-			int xmlMode=MODE_CHAT;
-			while(parser.getEventType()!=XmlPullParser.END_DOCUMENT)
+			parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false); //set up parser
+			parser.setInput(new StringReader(xmlString)); //set parser input
+			Log.v("XML Parser", "Extracting XML data..."); 
+			int xmlMode=MODE_CHAT; //initialize mode
+			while(parser.getEventType()!=XmlPullParser.END_DOCUMENT) //while you're still reading the document
 			{
-				boolean skip;
-				skip=true;
-				switch(parser.getEventType())
-				{
-					case XmlPullParser.START_TAG: 
-						//Log.v("XML Parser/tag","Start tag: " + parser.getName());
-						String n=parser.getName();
-						if(n.equals("playerlist"))
+				switch(parser.getEventType()) //easy way to parse XML while accounting for unknowns
+				{						//yes I know sequential loops make more sense.
+					case XmlPullParser.START_TAG:  //if it's an open tag
+						String n=parser.getName(); //to prevent repeating myself
+						if(n.equals("playerlist")) //if we've reached the player block
 						{
-							xmlMode=MODE_PLAYERS;
+							xmlMode=MODE_PLAYERS; //set element processor to players mode
 						}
 						if(n.equals("root")||n.equals("chatlog")||n.equals("playerlist"))
 						{
-							Log.v("XML Parser/tag","Skipping junktext");
+							Log.v("XML Parser/tag","Skipping junktext"); //skip irritating text data between large elements
 							parser.next();
 						} 
 						else
 						{
-							if(xmlMode==MODE_CHAT)
+							//process current element
+							if(xmlMode==MODE_CHAT) //if element processor set to chat mode
 							{
-								String owner=parser.getAttributeValue(ns, "owner");
-								String time=parser.getAttributeValue(ns, "time");
+								String owner=parser.getAttributeValue(ns, "owner"); //load basic info
+								String time=parser.getAttributeValue(ns, "time"); 
 								parser.next();
-								parser.require(XmlPullParser.TEXT, ns, null);
-								String content=parser.getText();
-								logEntries.add(new LogEntry(owner, time, content));
-								Log.v("XML Parser/gen", "Log Entry added to db. (chat)");
+								parser.require(XmlPullParser.TEXT, ns, null); //ensure correct format
+								String content=parser.getText(); //get chat entry content
+								logEntries.add(new LogEntry(owner, time, content)); //add to list
+								//Log.v("XML Parser/gen", "Entry added to db. (chat)");
 							}
-							else if(xmlMode==MODE_PLAYERS)
+							else if(xmlMode==MODE_PLAYERS) //if element processor set to player mode 
 							{
-								String name = parser.getAttributeValue(ns, "name");
-								URL smallHead = new URL(parser.getAttributeValue(ns, "smallhead"));
-								URL bigHead = new URL(parser.getAttributeValue(ns, "bighead"));
-								int color = Color.parseColor(parser.getAttributeValue(ns, "color"));
-								boolean onlineNow=false;
-								if(parser.getAttributeValue(ns, "onlinenow").equals("ONLINE"))
+								String name = parser.getAttributeValue(ns, "name"); //extract name
+								URL smallHead = new URL(parser.getAttributeValue(ns, "smallhead")); //extract URL for small (in-chat) head
+								URL bigHead = new URL(parser.getAttributeValue(ns, "bighead")); //extract URL for big (profile) head
+								int color = Color.parseColor(parser.getAttributeValue(ns, "color"));  //extract player theme color (used in chat log + profile) 
+								boolean onlineNow=false; 
+								if(parser.getAttributeValue(ns, "onlinenow").equals("ONLINE")) //find if player is online
 								{
-									onlineNow=true;
+									onlineNow=true; //and do something about it
 								}
 								else
 								{
 									onlineNow=false;
 								}
-								players.add(new Player(name, color, smallHead, bigHead, onlineNow));
-								Log.v("XML Parser/gen", "Entry added to db. (players)");
+								players.add(new Player(name, color, smallHead, bigHead, onlineNow)); //add player to list
+								Log.v("XML Parser/gen", name +" added to db. (players)");
 							}
 						}
 						break;
 					case XmlPullParser.END_TAG:
-						//Log.v("XML Parser/tag", "End tag: " + parser.getName());
-						parser.next();
+						parser.next(); //skip extra text
 						break;
 					case XmlPullParser.TEXT:
-						Log.v("XML Parser/text", "Text: " + parser.getText());
+						Log.v("XML Parser/text", "Text: " + parser.getText()); //never called 
 						break;
 					case XmlPullParser.END_DOCUMENT:
-						Log.w("XML Parser/doc","END DOCUMENT");
+						Log.w("XML Parser/doc","END DOCUMENT"); //notify of end of document
 						parser.next();
 						break;
 					case XmlPullParser.START_DOCUMENT:
-						Log.v("XML Parser/doc", "START DOCUMENT");
+						Log.v("XML Parser/doc", "START DOCUMENT"); //notify of start of document
 						break;
 					default: 
-						Log.w("XML Parser/err", "Unhandled XML event type.");
+						Log.w("XML Parser/err", "Unhandled XML event type."); //in case there's something weird in there.
 						break;
 					
 				}
-				if(skip)
-					parser.next();
+				parser.next();
 			}
-			//parser.require(XmlPullParser.END_TAG, ns, "");
-			//parser.nextTag();
-			Log.w("XML Parser/gen", "Parsing complete");
+			Log.v("XML Parser/gen", "Parsing complete"); //log parse completion
 		}
 		catch(IOException e)
 		{
 			Log.w("XML Parser","IOException occurred.");
+			Toast.makeText(this, "Error occurred during XML parsing", Toast.LENGTH_SHORT).show();
 		}
 		catch(XmlPullParserException e)
 		{
 			Log.w("XML Parser","Parser exception (probably from a require()");
+			Toast.makeText(this, "Error occurred during XML parsing", Toast.LENGTH_SHORT).show();
 			e.printStackTrace();
 		} 
-		
-		
-		
 	}
 	
 	
 	//Subclasses
-	private class LogEntry
+	private class LogEntry //class to hold a single line of chat text
 	{
-		String owner;
-		String time;
-		String content;
-		public LogEntry(String owner, String time, String content)
+		String owner; //person who said the line
+		String time; //time the thing was said
+		String content; //what was said
+		
+		public LogEntry(String owner, String time, String content) //constructor method
 		{
 			this.owner=owner;
 			this.time=time;
@@ -212,7 +206,7 @@ public class MainActivity extends Activity
 		{
 			return content;
 		}
-		public int getColor()
+		public int getColor() //to streamline colorizing log later.
 		{
 			for (Player p : players)
 			{
@@ -223,18 +217,19 @@ public class MainActivity extends Activity
 			}
 			return 0;
 		}
-
 	}
 	
-	private class Player
+	private class Player //class to hold a player's information
 	{
-		String pName;
-		int color;
-		URL sHeadURL;
-		URL bHeadURL;
-		boolean isOnline;
-		//boolean isLogged;
-		public Player(String pName, int color, URL sHeadURL, URL bHeadURL, boolean isOnline)
+		String pName; //player name
+		int color; //profile/chat color
+		URL sHeadURL; //URL of small (chat) head
+		URL bHeadURL; //URL of larger (profile) head
+		boolean isOnline; //if the player is currently online
+		//boolean isLogged; //for players who are in the whitelist who haven't played since
+		//before the oldest log file still existing.
+		
+		public Player(String pName, int color, URL sHeadURL, URL bHeadURL, boolean isOnline) //constructor
 		{
 			this.pName=pName;
 			this.color=color;
@@ -242,11 +237,13 @@ public class MainActivity extends Activity
 			this.bHeadURL=bHeadURL;
 			this.isOnline=isOnline;
 		}
-		public String getName()
+		
+		//accessor methods
+		public String getName() 
 		{
 			return pName;
 		}
-		public int getColor()
+		public int getColor() 
 		{
 			return color;
 		}
@@ -264,39 +261,37 @@ public class MainActivity extends Activity
 		}
 	}
 	
-	private class MyTask extends AsyncTask <String, Void, String>
+	private class MyTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
 	{
 		@Override
-		protected String doInBackground(String... params)
+		protected String doInBackground(String... params) 
 		{
 			if(params==null||params.length == 0)
 			{
-				return null;
+				return null; //cancel if nothing useful passed
 			}
 			Log.v("GET", "GET thread launched");
-			String url=params[0];
-			HttpClient client = new DefaultHttpClient();
-			String strResponse=null;
-			HttpGet getStuff = new HttpGet(url);
-			boolean ok=true;
+			String url=params[0]; //URL to get XML from 
+			HttpClient client = new DefaultHttpClient(); //init download client
+			String strResponse=null; //response container
+			HttpGet getStuff = new HttpGet(url); //the get request to use
+			boolean ok=true; //changed to false if errors occur
 			try
 			{
-				HttpResponse getResponse = client.execute(getStuff);
-				strResponse= EntityUtils.toString(getResponse.getEntity());
+				HttpResponse getResponse = client.execute(getStuff); //download content
+				strResponse= EntityUtils.toString(getResponse.getEntity()); //convert content to XML String
 			} catch (ClientProtocolException e)
 			{
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 				ok=false;
 			} catch (IOException e)
 			{
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 				ok=false;
 			}finally{
 				//Here because it doesn't work without it.
 			}
-			if(ok)
+			if(ok) //if nothing bad happened
 			{
 				Log.v("GET", "GET completed successfully");
 			}
@@ -309,7 +304,7 @@ public class MainActivity extends Activity
 		
 		protected void onPostExecute(String result)
 		{
-			pushString(result);
+			pushString(result); //do stuff with the result
 		}
 	}
 	
