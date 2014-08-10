@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginBottom="5dp" >
+
+    <TextView
+        android:id="@+id/time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"
+        android:text="[Time____]" />
+
+    <TextView
+        android:id="@+id/playerName"
+        android:layout_width="120dip"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_marginLeft="6dip"
+        android:layout_toRightOf="@+id/time"
+        android:text="[Player name]"
+        android:textColor="#FF6D6D" />
+
+    <ImageView
+        android:id="@+id/chatHead"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignRight="@+id/playerName"
+        android:src="@drawable/abc_ab_bottom_solid_light_holo" />
+
+    <TextView
+        android:id="@+id/playerSaid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_toRightOf="@+id/playerName"
+        android:text="What player said"
+        android:textColor="#FF6D6D" />
+
+</RelativeLayout>

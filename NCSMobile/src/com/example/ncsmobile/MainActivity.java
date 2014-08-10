@@ -1,6 +1,9 @@
 package com.example.ncsmobile;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.util.ArrayList;
@@ -16,13 +19,20 @@ import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Xml;
-import android.view.View;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,40 +44,56 @@ public class MainActivity extends Activity
 	String xmlText=null; //variable to put downloaded XML data into.
 	public static final int MODE_CHAT=45; //mode for when parser is scanning chat entries
 	public static final int MODE_PLAYERS=46; //mode for when parser is scanning players
-	
+	public static final String smallHeadSubDir="/small/";
+	public static final String bigHeadSubDir="/big/";
+	public static final String headDir="/head/";
+	public static final String KEY_SERVER_XML = "KEY_SERVER_XML";
+	ArrayAdapter playerAdapter;
+	ArrayAdapter logEntryAdapter;
+	ListView playerListView;
+	ListView logListView;
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
-		tv=(TextView)findViewById(R.id.textView1); //textview for holding XML (debug)
-		button2=(Button)findViewById(R.id.button2); //button to parse DL'd XML (debug)
-		((Button)findViewById(R.id.button1)).setOnClickListener(new View.OnClickListener() {
-			
-			@Override
-			public void onClick(View v)
-			{
-				getXmlFromServer(); //assign XML fetching function to button
-			}
-		});
-		((Button)button2).setOnClickListener(new View.OnClickListener() {
-			
-			@Override
-			public void onClick(View v)
-			{
-				populateFields((String) tv.getText()); //assign force XML reparse to button
-				
-			}
-		}); 
+		setContentView(R.layout.layout_drawer);
+		//getXmlFromServer();
+		//((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener(){public void onClick(View v){clearCache();}});
 	}
-	
+	private Toast xmlToast;
 	public void getXmlFromServer() //launch GET thread to retrieve XML 
 	{
 		Log.v("NCSMobile", "Deploying GET thread...");
-		Toast.makeText(this, "Refreshing content...", Toast.LENGTH_SHORT).show();
-		new MyTask().execute(sDataUrl);
+		xmlToast=new Toast(this);
+		xmlToast.makeText(this, "Refreshing content...", Toast.LENGTH_SHORT).show();
+		new XmlDownloaderTask().execute(sDataUrl);
+	}
+	@Override
+	protected void onSaveInstanceState(Bundle outState)
+	{
+		super.onSaveInstanceState(outState);
+		
+		//outState.putString(KEY_SERVER_XML, xmlText);
 	}
 	
+	@Override
+	public void onRestoreInstanceState(Bundle savedInstanceState)
+	{
+		super.onRestoreInstanceState(savedInstanceState);
+		String oldXmlTxt=savedInstanceState.getString(KEY_SERVER_XML);
+		if ( !(oldXmlTxt==null))
+		{
+			pushString(oldXmlTxt);
+			logEntryAdapter.notifyDataSetChanged();
+			playerAdapter.notifyDataSetChanged();
+		}
+		else
+		{
+			getXmlFromServer();
+		}
+		
+		
+	}
 	public void pushString(String string) //Called when GET thread completes, handles errors and publishes result
 	{
 		xmlText=string;
@@ -78,10 +104,11 @@ public class MainActivity extends Activity
 		}
 		else
 		{
+			xmlToast.cancel();
 			Toast.makeText(this, "Content loaded", Toast.LENGTH_SHORT).show();
 			populateFields(string);
 		}
-		tv.setText(xmlText); //TODO: DEBUG UGLINESS
+		//tv.setText(xmlText); //TODO: DEBUG UGLINESS
 	}
 	List<LogEntry> logEntries= new ArrayList<LogEntry>(); //list of log entries extracted from XML
 	List<Player> players=new ArrayList<Player>(); //list of players extracted from XML
@@ -90,6 +117,8 @@ public class MainActivity extends Activity
 		//init XML reader
 		XmlPullParser parser = Xml.newPullParser();
 		String ns=null; //namespace
+		logEntries.clear();
+		players.clear();
 		try //because things break
 		{
 			parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false); //set up parser
@@ -165,6 +194,7 @@ public class MainActivity extends Activity
 				parser.next();
 			}
 			Log.v("XML Parser/gen", "Parsing complete"); //log parse completion
+			
 		}
 		catch(IOException e)
 		{
@@ -177,11 +207,42 @@ public class MainActivity extends Activity
 			Toast.makeText(this, "Error occurred during XML parsing", Toast.LENGTH_SHORT).show();
 			e.printStackTrace();
 		} 
+		
+		for (LogEntry le:logEntries)
+		{
+			le.setPlayerDB((ArrayList<Player>)players);
+		}
+		playerAdapter= new PlayerAdapter(this, players);
+		logEntryAdapter=new LogEntryAdapter(this, logEntries);
+		logListView = (ListView) findViewById(R.id.chatview);
+		logListView.setAdapter(logEntryAdapter);
+		playerListView=(ListView) findViewById(R.id.listview);
+		playerListView.setAdapter(playerAdapter);
+		xmlToast.cancel();
+		downloadHeads();
+		
 	}
 	
-	
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu)
+	{
+		MenuInflater inflater=getMenuInflater();
+		inflater.inflate(R.menu.global, menu);
+		return super.onCreateOptionsMenu(menu);
+	}
+	public boolean onOptionsItemSelected(MenuItem item)
+	{
+		switch(item.getItemId())
+		{
+			case R.id.action_refresh:
+				getXmlFromServer();
+				return true;
+			default:
+				return super.onOptionsItemSelected(item);
+		}
+	}
 	//Subclasses
-	private class LogEntry //class to hold a single line of chat text
+	/*public class LogEntry //class to hold a single line of chat text
 	{
 		String owner; //person who said the line
 		String time; //time the thing was said
@@ -217,51 +278,117 @@ public class MainActivity extends Activity
 			}
 			return 0;
 		}
-	}
-	
-	private class Player //class to hold a player's information
+	}*/
+	public void downloadHeads()
 	{
-		String pName; //player name
-		int color; //profile/chat color
-		URL sHeadURL; //URL of small (chat) head
-		URL bHeadURL; //URL of larger (profile) head
-		boolean isOnline; //if the player is currently online
-		//boolean isLogged; //for players who are in the whitelist who haven't played since
-		//before the oldest log file still existing.
-		
-		public Player(String pName, int color, URL sHeadURL, URL bHeadURL, boolean isOnline) //constructor
+		Toast pToast = Toast.makeText(this, "Downloading heads. This may take a while...", Toast.LENGTH_SHORT);
+		pToast.show();
+		boolean headsHere=false;
+		for (Player p:players)
 		{
-			this.pName=pName;
-			this.color=color;
-			this.sHeadURL=sHeadURL;
-			this.bHeadURL=bHeadURL;
-			this.isOnline=isOnline;
+			if(!hasHead(p))
+			{
+				headsHere=true;
+				new headDownloaderTask().execute(p);
+			}
+			if(!headsHere)
+			{
+				pToast.cancel();
+				putHeadInPlayer(p);
+				playerAdapter.notifyDataSetChanged();
+			}
+			try
+			{
+				putHeadInPlayer(p);
+			}catch(Exception e){
+				Log.w("Heads","Putting head in player " + p.getName() + " failed.");
+				e.printStackTrace();
+			}
+			
+			
 		}
 		
-		//accessor methods
-		public String getName() 
-		{
-			return pName;
-		}
-		public int getColor() 
-		{
-			return color;
-		}
-		public URL getSmallHead()
-		{
-			return sHeadURL;
-		}
-		public URL getBigHead()
-		{
-			return bHeadURL;
-		}
-		public boolean isOnline()
-		{
-			return isOnline;
-		}
 	}
 	
-	private class MyTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
+	public class headDownloaderTask extends AsyncTask <Player, Void, Player>
+	{
+		@Override
+		protected Player doInBackground(Player... params )
+		{
+			if(params==null||params.length == 0)
+			{
+				return null; //cancel if nothing useful passed
+			}
+			Log.v("Heads","Head downloader task launched.");
+			boolean success=true;
+			HttpClient clientS = new DefaultHttpClient();
+			HttpClient clientB = new DefaultHttpClient();
+			Bitmap rawResponse = null;
+			int howManyPlayers=params.length;
+			int playerIndex = 0;
+			for(Player cPlayer:params)
+			{
+				HttpGet currentBigHeadGet = new HttpGet(cPlayer.getBigHeadURL().toString()); //get big head
+				HttpGet currentSmallHeadGet = new HttpGet(cPlayer.getSmallHeadURL().toString()); //get small head
+				try{
+					Log.v("Heads", "Getting heads for " + cPlayer.getName() + " (" + playerIndex + "/" + params.length + ")");
+					HttpResponse bigHeadResponse = clientB.execute(currentBigHeadGet);
+					Log.v("Heads", "Done getting " + cPlayer.getName() + "'s big head");
+					HttpResponse smallHeadResponse = clientS.execute(currentSmallHeadGet);
+					Log.v("Heads", "Done getting " + cPlayer.getName() + "'s small head");
+					byte[] rawBigHead=EntityUtils.toByteArray(bigHeadResponse.getEntity());
+					byte[] rawSmallHead=EntityUtils.toByteArray(smallHeadResponse.getEntity());
+					FileOutputStream bigHeadOutStream = new FileOutputStream(
+							getCacheDir() + headDir + bigHeadSubDir + 
+							cPlayer.getName() + ".png");
+					FileOutputStream smallHeadOutStream = new FileOutputStream(
+							getCacheDir() + headDir + smallHeadSubDir + 
+							cPlayer.getName() + ".png");
+					bigHeadOutStream.write(rawBigHead);
+					smallHeadOutStream.write(rawSmallHead);
+					Log.v("Heads", "Saved " + cPlayer.getName() + "'s heads.");
+		 		}
+				catch(ClientProtocolException e)
+				{
+					e.printStackTrace();
+					Log.w("Heads","Something happened in the head downloader (Client protocol exception)");
+				}
+				catch(IOException e)
+				{
+					e.printStackTrace();
+					Log.w("Heads", "Something happened in the head downloader (IO exception of some kind)");
+				}
+				finally
+				{
+					//give up
+				}
+				
+				playerIndex++;
+			}
+			return params[0];
+		}
+		protected void onPostExecute(Player player)
+		{
+			putHeadInPlayer(player);
+			playerAdapter.notifyDataSetChanged();
+		}
+	}
+	public void clearCache()
+	{
+		for( File d:(((new File(getCacheDir().getAbsolutePath() + headDir +
+				smallHeadSubDir))).listFiles()))
+		{
+			d.delete();
+		}
+		for( File d:(((new File(getCacheDir().getAbsolutePath() + headDir +
+				bigHeadSubDir))).listFiles()))
+		{
+			d.delete();
+		}
+		
+	}
+	
+	private class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
 	{
 		@Override
 		protected String doInBackground(String... params) 
@@ -305,7 +432,77 @@ public class MainActivity extends Activity
 		protected void onPostExecute(String result)
 		{
 			pushString(result); //do stuff with the result
+			
 		}
 	}
-	
+	public boolean hasHead(Player player)
+	{
+		File headFolder = new File(getCacheDir().getAbsolutePath() + headDir);
+		if (!headFolder.exists())
+		{
+			headFolder.mkdir();
+		}
+		File smallHeadFolder = new File(getCacheDir().getAbsolutePath() + headDir + smallHeadSubDir);
+		if(!smallHeadFolder.exists())
+		{
+			smallHeadFolder.mkdir();
+		}
+		File bigHeadFolder = new File(getCacheDir().getAbsolutePath() + headDir + bigHeadSubDir);
+		if(!bigHeadFolder.exists())
+		{
+			bigHeadFolder.mkdir();
+		}
+		File smallHead = new File(
+				getCacheDir().getAbsolutePath() + 
+				headDir + smallHeadSubDir + player.getName() + ".png");
+		File bigHead = new File(
+				getCacheDir().getAbsolutePath() + 
+				headDir + bigHeadSubDir + player.getName() + ".png");
+		return bigHead.exists()&&smallHead.exists();
+		
+	}
+	public void putHeadInPlayer(Player player)
+	{
+		if(hasHead(player))
+		{
+			Bitmap bigHeadBitmap = BitmapFactory.decodeFile(
+					getCacheDir().getAbsolutePath() +headDir+
+					bigHeadSubDir + player.getName() + ".png");
+			
+			Bitmap smallHeadBitmap = BitmapFactory.decodeFile(
+					getCacheDir().getAbsolutePath() +headDir+
+					smallHeadSubDir + player.getName() + ".png");
+			
+			player.setBigHead(bigHeadBitmap);
+			player.setSmallHead(smallHeadBitmap);
+			
+		}
+	}
+	public class HeadDownloaderTask extends AsyncTask<Player, Void, Drawable>
+	{
+
+		@Override
+		protected Drawable doInBackground(Player... params)
+		{
+			
+			Player pl=params[0];
+			try{
+				InputStream inStream = (InputStream) pl.getBigHeadURL().getContent();
+				Drawable drawable = Drawable.createFromStream(inStream, "NCS Media");
+				//FileOutputStream outStream = new FileOutputStream("/data/data/com.example.ncsmobile/cache/" + pl.getName() + ".png");
+				return drawable;
+			}
+			catch(Exception e)
+			{
+				//TODO: fill this stuff in.
+			}
+			return null;
+		}
+		 
+		protected void onPostExecute(Drawable result)
+		{
+			logEntryAdapter.notifyDataSetChanged();
+		}
+		
+	}
 }
