@@ -255,11 +255,11 @@ int id always 0x7f06000b
 int id beginning 0x7f060011
 int id button1 0x7f060048
 int id chatHead 0x7f060043
-int id chatview 0x7f060040
+int id chatview 0x7f06003f
 int id checkbox 0x7f06002d
 int id collapseActionView 0x7f06000d
 int id default_activity_button 0x7f060028
-int id delete_button 0x7f06003f
+int id delete_button 0x7f060040
 int id dialog 0x7f06000e
 int id disableHome 0x7f060008
 int id drawer_layout 0x7f06003d

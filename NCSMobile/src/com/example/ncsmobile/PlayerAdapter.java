@@ -56,7 +56,7 @@ public class PlayerAdapter extends ArrayAdapter<Player>
 			}
 		});
 		imageHead.setImageBitmap(currentPlayer.getSmallHead());
-		Log.v("Heads","Displaying " + currentPlayer.getName() + "'s small head");
+		//Log.v("Heads","Displaying " + currentPlayer.getName() + "'s small head");
 		
 		//imageHead.setImageURI(Uri.parse(currentPlayer.getBigHead().toString()));
 		return convertView;

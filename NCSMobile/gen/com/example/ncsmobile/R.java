@@ -1093,11 +1093,11 @@ containing a value of this type.
         public static final int beginning=0x7f060011;
         public static final int button1=0x7f060048;
         public static final int chatHead=0x7f060043;
-        public static final int chatview=0x7f060040;
+        public static final int chatview=0x7f06003f;
         public static final int checkbox=0x7f06002d;
         public static final int collapseActionView=0x7f06000d;
         public static final int default_activity_button=0x7f060028;
-        public static final int delete_button=0x7f06003f;
+        public static final int delete_button=0x7f060040;
         public static final int dialog=0x7f06000e;
         public static final int disableHome=0x7f060008;
         public static final int drawer_layout=0x7f06003d;
