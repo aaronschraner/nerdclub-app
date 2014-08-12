@@ -10,15 +10,17 @@
         android:id="@+id/frame_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" >
-		<!-- Button
+		<Button
 		  	android:id="@+id/delete_button"
         	android:layout_width="wrap_content"
         	android:layout_height="wrap_content" 
-        	android:text="Clear cache"
-        	android:onClick="clearCache"/> -->
-		  
+        	android:text="Launch service"
+        	/>
+		
+		
         <ListView
         	android:id="@+id/chatview"
+        	android:stackFromBottom="true"
         	android:layout_width="match_parent"
         	android:layout_height="wrap_content"
         	android:layout_below="@+id/delete_button" />

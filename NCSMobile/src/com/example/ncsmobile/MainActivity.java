@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 import org.apache.http.HttpResponse;
@@ -19,17 +20,28 @@ import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
 import android.app.Activity;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.SoundPool;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 import android.util.Xml;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.View.OnClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -38,6 +50,8 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity
 {
+	
+	String firstContainer=null;
 	TextView tv; //view to hold fetched XML (Debug)
 	Button button2; //Force call parse XML (Debug)
 	String sDataUrl="http://71.193.212.135/app/status.xml"; //URL to grab data from
@@ -48,6 +62,12 @@ public class MainActivity extends Activity
 	public static final String bigHeadSubDir="/big/";
 	public static final String headDir="/head/";
 	public static final String KEY_SERVER_XML = "KEY_SERVER_XML";
+	public static final int RINGTONE_LONG=320;
+	public static final int RINGTONE_SHORT=321;
+	public static final int DELAY_REFRESH = 500;
+	private static final int FLAG_SOUND_ONLY = 11;
+	private static final int FLAG_UPDATE_NORMAL = 15;
+	public static final int ONLINE_NOTIFY=34;
 	ArrayAdapter playerAdapter;
 	ArrayAdapter logEntryAdapter;
 	ListView playerListView;
@@ -56,17 +76,23 @@ public class MainActivity extends Activity
 	protected void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
+		Log.v("Startup", "onCreate called");
 		setContentView(R.layout.layout_drawer);
+		Log.v("Startup", "set content view to drawer layout");
 		//getXmlFromServer();
-		//((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener(){public void onClick(View v){clearCache();}});
+		((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener(){public void onClick(View v){launchService();}});
+		Log.v("Startup","Assigned onClickListener to launch auto-notifier");
+		notifierToast = new Toast(this);
+		
 	}
 	private Toast xmlToast;
 	public void getXmlFromServer() //launch GET thread to retrieve XML 
 	{
 		Log.v("NCSMobile", "Deploying GET thread...");
-		xmlToast=new Toast(this);
-		xmlToast.makeText(this, "Refreshing content...", Toast.LENGTH_SHORT).show();
-		new XmlDownloaderTask().execute(sDataUrl);
+		
+		//xmlToast=new Toast(this);
+		//xmlToast.makeText(this, "Refreshing content...", Toast.LENGTH_SHORT).show();
+		new XmlDownloaderTask(this).execute(sDataUrl);
 	}
 	@Override
 	protected void onSaveInstanceState(Bundle outState)
@@ -96,22 +122,44 @@ public class MainActivity extends Activity
 	}
 	public void pushString(String string) //Called when GET thread completes, handles errors and publishes result
 	{
-		xmlText=string;
 		if(string==null)
 		{
 			Toast.makeText(this, "Failed to fetch content", Toast.LENGTH_SHORT).show();
 			
 		}
+		else if (!(string.equals(xmlText)))
+		{
+			//xmlToast.cancel();
+			//Toast.makeText(this, "Content loaded", Toast.LENGTH_SHORT).show();
+			populateFields(string);
+			postXmlUpdateUI(FLAG_UPDATE_NORMAL);
+		}
 		else
 		{
-			xmlToast.cancel();
-			Toast.makeText(this, "Content loaded", Toast.LENGTH_SHORT).show();
-			populateFields(string);
+			Log.v("XML Parser", "No log updates.");
+			postXmlUpdateUI(FLAG_SOUND_ONLY);
 		}
 		//tv.setText(xmlText); //TODO: DEBUG UGLINESS
+		xmlText=string;
+		
+	}
+	public void notifyOnline(Player player)
+	{
+		NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this);
+		notificationBuilder.setContentTitle(player.getName() + " joined the server!");
+		notificationBuilder.setContentText("Swipe away to silence.");
+		notificationBuilder.setLargeIcon(player.getBigHead());
+		Intent notifyIntent = new Intent(this,MainActivity.class);
+		PendingIntent notifyPendingIntent = PendingIntent.getActivity(this, 0, notifyIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+		notificationBuilder.setContentIntent(notifyPendingIntent);
+		notificationBuilder.setAutoCancel(true);
+		NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+		notificationManager.notify(ONLINE_NOTIFY,notificationBuilder.build());
 	}
 	List<LogEntry> logEntries= new ArrayList<LogEntry>(); //list of log entries extracted from XML
 	List<Player> players=new ArrayList<Player>(); //list of players extracted from XML
+	boolean notifierPlaying=false;
+	boolean shutup=false;
 	public void populateFields(String xmlString) //MASSIVE function to extract that^ data from the XML
 	{
 		//init XML reader
@@ -128,7 +176,7 @@ public class MainActivity extends Activity
 			while(parser.getEventType()!=XmlPullParser.END_DOCUMENT) //while you're still reading the document
 			{
 				switch(parser.getEventType()) //easy way to parse XML while accounting for unknowns
-				{						//yes I know sequential loops make more sense.
+				{
 					case XmlPullParser.START_TAG:  //if it's an open tag
 						String n=parser.getName(); //to prevent repeating myself
 						if(n.equals("playerlist")) //if we've reached the player block
@@ -208,19 +256,156 @@ public class MainActivity extends Activity
 			e.printStackTrace();
 		} 
 		
+		
+		
+		
+	}
+	Menu myMenu = null;
+	public static boolean autorefreshRunning=false;
+	static MediaPlayer mp;
+	Toast notifierToast = null;
+	public void postXmlUpdateUI(int flags)
+	{
+		if(flags==FLAG_SOUND_ONLY)
+		{
+			handleSounds(players);
+			return;
+		}
+		Log.v("UI","Updating UI..." );
+		handleSounds(players);
 		for (LogEntry le:logEntries)
 		{
-			le.setPlayerDB((ArrayList<Player>)players);
+			le.setPlayerDB((ArrayList<Player>)players); //ensure each log entry can find its owner
 		}
-		playerAdapter= new PlayerAdapter(this, players);
-		logEntryAdapter=new LogEntryAdapter(this, logEntries);
-		logListView = (ListView) findViewById(R.id.chatview);
-		logListView.setAdapter(logEntryAdapter);
-		playerListView=(ListView) findViewById(R.id.listview);
-		playerListView.setAdapter(playerAdapter);
-		xmlToast.cancel();
+		
+		
+		if(firstContainer==null)
+		{
+			playerAdapter= new PlayerAdapter(this, players);
+			logEntryAdapter=new LogEntryAdapter(this, logEntries);
+			logListView = (ListView) findViewById(R.id.chatview);
+			logListView.setAdapter(logEntryAdapter);
+			playerListView=(ListView) findViewById(R.id.listview);
+			playerListView.setAdapter(playerAdapter);
+			//xmlToast.cancel();
+			firstContainer="Not null anymore.";
+		}
+		else
+		{
+			playerAdapter.notifyDataSetChanged();
+			logEntryAdapter.notifyDataSetChanged();
+			//Toast.makeText(this, "Yes master...", Toast.LENGTH_SHORT).show();
+		}
+		((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener(){public void onClick(View v){notifyOnline(players.get(0));}});
 		downloadHeads();
 		
+	}
+		
+		
+	
+	public void handleSounds(List<Player> players)
+	{
+		String playersOnlineStr="";
+		int playersOnline=0;
+		for (Player p:players)
+		{
+			if(p.isOnline())
+			{
+				playersOnline++;
+				if(playersOnline>1)
+				{
+					playersOnlineStr += ", ";
+					
+				}
+				playersOnlineStr += (p.getName());
+				
+			}
+		}
+		if(playersOnline>0)
+		{
+			notifierToast.cancel();
+			notifierToast.makeText(this, "NCSMobile: " + playersOnlineStr + " online now!", Toast.LENGTH_SHORT).show();
+			
+			if(playersOnline<3)
+			{
+				if(notifierPlaying==false)
+				{
+					shutup=false;
+					
+					notifierPlaying=true;
+				}
+				playSound(RINGTONE_SHORT);
+			}
+			else
+			{
+				if(notifierPlaying==false)
+				{
+					shutup=false;
+					notifierPlaying=true;
+				}
+				playSound(RINGTONE_LONG);
+			}
+		}
+		else
+		{
+			notifierPlaying=false;
+			
+			if(mp!=null)
+			{
+				if(mp.isPlaying())
+				{
+					mp.pause();
+					mp.stop();
+				}
+			}
+			cplaying = 0;
+		}
+	
+	}
+	public static class SoundPlayer{
+		public static final int SS = R.raw.ringtone_cut;
+		//public static final int SL = R.raw.ringtone_extended;
+		private static SoundPool soundPool;
+		private static HashMap soundPoolMap;
+		public static void initSounds(Context context) 
+		{
+			soundPool = new SoundPool(2,AudioManager.STREAM_NOTIFICATION,100);
+			soundPoolMap = new HashMap(3);
+			soundPoolMap.put(SS, soundPool.load(context,R.raw.ringtone_cut,1));
+			//soundPoolMap.put(SL, soundPool.load(context,R.raw.ringtone_extended,2));
+			
+		}
+		public static void playSound()
+		{
+			if(mp.isPlaying()==false)
+			{
+				mp.start();
+				
+			}
+			
+			
+		}
+	}
+	int cplaying=0;
+	public void playSound(int soundType)
+	{
+		switch(soundType)
+		{
+			case RINGTONE_SHORT:
+				if(mp==null||cplaying==0||cplaying==RINGTONE_LONG)
+					mp = MediaPlayer.create(this, R.raw.ringtone_cut);
+				cplaying=RINGTONE_SHORT;
+				if(mp.isPlaying()==false)
+					SoundPlayer.playSound();
+				break;
+			case RINGTONE_LONG:
+				if(mp==null||cplaying==0||cplaying==RINGTONE_SHORT)
+					mp = MediaPlayer.create(this, R.raw.ringtone_extended);
+				cplaying=RINGTONE_LONG;
+				if(mp.isPlaying()==false)
+					SoundPlayer.playSound();
+				break; // */
+		}
 	}
 	
 	@Override
@@ -228,6 +413,7 @@ public class MainActivity extends Activity
 	{
 		MenuInflater inflater=getMenuInflater();
 		inflater.inflate(R.menu.global, menu);
+		myMenu=menu;
 		return super.onCreateOptionsMenu(menu);
 	}
 	public boolean onOptionsItemSelected(MenuItem item)
@@ -237,48 +423,72 @@ public class MainActivity extends Activity
 			case R.id.action_refresh:
 				getXmlFromServer();
 				return true;
+			case R.id.action_autorefresh:
+				if(autorefreshRunning)
+					killService();
+				else
+					launchService();
+				return true;
 			default:
 				return super.onOptionsItemSelected(item);
 		}
 	}
-	//Subclasses
-	/*public class LogEntry //class to hold a single line of chat text
+	Handler notificationHandler = new Handler();
+	private static boolean cont=true;
+	Runnable notifierTask = new Runnable()
 	{
-		String owner; //person who said the line
-		String time; //time the thing was said
-		String content; //what was said
-		
-		public LogEntry(String owner, String time, String content) //constructor method
+		@Override
+		public void run()
 		{
-			this.owner=owner;
-			this.time=time;
-			this.content=content;
+			getXmlFromServer();
+			if(cont)
+				notificationHandler.postDelayed(notifierTask,DELAY_REFRESH);
 		}
-		//accessor methods
-		public String getOwner()
-		{
-			return owner;
-		}
-		public String getTime()
-		{
-			return time;
-		}
-		public String getContent()
-		{
-			return content;
-		}
-		public int getColor() //to streamline colorizing log later.
-		{
-			for (Player p : players)
+	};
+	public void launchService()
+	{
+		//launch the notifier service
+		//startService(new Intent(getBaseContext(), NotifierService.class));
+		getXmlFromServer();
+		cont=true;
+		notificationHandler.postDelayed(notifierTask,DELAY_REFRESH);
+		((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v)
 			{
-				if(p.getName().equals(owner))
-				{
-					return p.getColor();
-				}
+				// TODO Auto-generated method stub
+				killService();
+				
 			}
-			return 0;
-		}
-	}*/
+		});
+		Log.v("Service manager", "Casting autorefresh");
+		MenuItem autorefresh = (MenuItem) myMenu.findItem(R.id.action_autorefresh);
+		Log.v("Service manager", "Setting new drawable resource");
+		autorefresh.setIcon(R.drawable.ic_menu_autorefresh_on);
+		autorefreshRunning=true;
+	}
+	
+	public void killService()
+	{
+		//stopService(new Intent(getBaseContext(), NotifierService.class));
+		notificationHandler.removeCallbacks(notifierTask);
+		cont=false;
+		((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v)
+			{
+				// TODO Auto-generated method stub
+				launchService();
+			}
+		});
+		MenuItem autorefresh = (MenuItem) myMenu.findItem(R.id.action_autorefresh);
+		autorefresh.setIcon(R.drawable.ic_menu_autorefresh_off);
+		autorefreshRunning=false;
+	}
+	//Subclasses
+	
 	public void downloadHeads()
 	{
 		Toast pToast = Toast.makeText(this, "Downloading heads. This may take a while...", Toast.LENGTH_SHORT);
@@ -310,8 +520,10 @@ public class MainActivity extends Activity
 		
 	}
 	
+	
 	public class headDownloaderTask extends AsyncTask <Player, Void, Player>
 	{
+		
 		@Override
 		protected Player doInBackground(Player... params )
 		{
@@ -373,6 +585,7 @@ public class MainActivity extends Activity
 			playerAdapter.notifyDataSetChanged();
 		}
 	}
+	
 	public void clearCache()
 	{
 		for( File d:(((new File(getCacheDir().getAbsolutePath() + headDir +
@@ -388,7 +601,7 @@ public class MainActivity extends Activity
 		
 	}
 	
-	private class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
+	/*public class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
 	{
 		@Override
 		protected String doInBackground(String... params) 
@@ -434,7 +647,7 @@ public class MainActivity extends Activity
 			pushString(result); //do stuff with the result
 			
 		}
-	}
+	}*/
 	public boolean hasHead(Player player)
 	{
 		File headFolder = new File(getCacheDir().getAbsolutePath() + headDir);
@@ -480,7 +693,7 @@ public class MainActivity extends Activity
 	}
 	public class HeadDownloaderTask extends AsyncTask<Player, Void, Drawable>
 	{
-
+		
 		@Override
 		protected Drawable doInBackground(Player... params)
 		{

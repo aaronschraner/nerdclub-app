@@ -11,7 +11,7 @@
         android:layout_alignParentLeft="true"
         android:layout_alignParentTop="true"
         android:text="[Time____]" />
-
+ 
     <TextView
         android:id="@+id/playerName"
         android:layout_width="120dip"

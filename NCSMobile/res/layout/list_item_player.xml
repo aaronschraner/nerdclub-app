@@ -32,5 +32,5 @@
         android:text="Offline"
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:textColor="#FF0000" />
-
+ 
 </RelativeLayout>
