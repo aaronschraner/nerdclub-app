@@ -10,7 +10,7 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-public class LogEntryAdapter extends ArrayAdapter<LogEntry>
+public class LogEntryAdapter extends ArrayAdapter<LogEntry> //custom adapter for chat log
 {
 	Context context;
 	public LogEntryAdapter(Context context, List<LogEntry> logEntries)
@@ -44,7 +44,7 @@ public class LogEntryAdapter extends ArrayAdapter<LogEntry>
 		}
 		else
 		{
-			playerHead.setImageResource(R.drawable.abc_ab_bottom_solid_light_holo);
+			playerHead.setImageResource(R.drawable.abc_ab_bottom_solid_light_holo); //default head resource (if bitmap not generated yet)
 		}
 		return convertView;
 	}

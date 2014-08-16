@@ -29,8 +29,6 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MenuItem.OnMenuItemClickListener;
-import android.view.View;
-import android.view.View.OnClickListener;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
@@ -156,8 +154,6 @@ public class MainActivity extends Activity
 	}
 	Menu myMenu = null;
 	public static boolean autorefreshRunning=false;
-	//static MediaPlayer mp;
-	//Toast notifierToast = null;
 	public void postXmlUpdateUI(List<Player> players, List<LogEntry> logEntries)
 	{
 		for (LogEntry le:logEntries)
@@ -184,11 +180,11 @@ public class MainActivity extends Activity
 		}
 		//
 		downloadHeads();
-		for (Player p:players)
+		/*for (Player p:players)
 		{
 			putHeadInPlayer(p);
 			playerAdapter.notifyDataSetChanged();
-		}
+		}*/
 	}
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu)
@@ -196,43 +192,31 @@ public class MainActivity extends Activity
 		MenuInflater inflater=getMenuInflater();
 		inflater.inflate(R.menu.global, menu);
 		myMenu=menu;
-		launchRealService();
+		launchRealService(); 
 		return super.onCreateOptionsMenu(menu);
 	}
 	public boolean onOptionsItemSelected(MenuItem item)
 	{
 		switch(item.getItemId())
 		{
-			case R.id.action_refresh:
+			case R.id.action_refresh: //force update button (the one with no letter in it)
 				Log.v("Notifier service", "Menu item clicked");
 				NotifierService.getInstance().getXmlFromServer();
 				Log.v("Notifier service", "GetXmlFromServer launched ");
 				return true;
 				
-			case R.id.action_autorefresh:
-				if(NotifierService.getInstance().autoUpdate)
-					NotifierService.getInstance().launchAutoUpdater();
-				else
+			case R.id.action_autorefresh: //auto-update button
+				if(NotifierService.getInstance().autoUpdate) //if notifier is set to auto-update
+					NotifierService.getInstance().launchAutoUpdater(); //start the auto-updater
+				else //if it's not set to auto update
 				{
-					NotifierService.getInstance().killAutoUpdater();
+					NotifierService.getInstance().killAutoUpdater(); //stop the auto-updater
 				}
 			default:
 				return super.onOptionsItemSelected(item);
 		}
 	}
-	Handler notificationHandler = new Handler();
-	private static boolean cont=true;
-	/*Runnable notifierTask = new Runnable()
-	{
-		@Override
-		public void run()
-		{
-			NotifierService.getInstance().getXmlFromServer();
-			if(cont)
-				notificationHandler.postDelayed(notifierTask,DELAY_REFRESH);
-		}
-	};*/
-	public void setPlayersArray(List<Player> players)
+	public void setPlayersArray(List<Player> players) //so the notification can send MainActivity the players
 	{
 		this.players=players;
 	}
@@ -242,86 +226,59 @@ public class MainActivity extends Activity
 	}
 	public void pushString(String string)
 	{
-		Log.w("General", "Warning: something called pushString in MainActivity");
+		Log.w("General", "Warning: something called pushString in MainActivity"); //for debug.
 	}
 	
-	public void setUIRefreshing(boolean refreshing)
+	public void setUIRefreshing(boolean refreshing)  //set the autorefresh button to reflect the current state.
 	{
-		if(refreshing)
+		MenuItem autorefresh = (MenuItem) myMenu.findItem(R.id.action_autorefresh); //get reference to autoupdate button
+		if(refreshing) //if the UI should look like it's refreshing
 		{
-			/*((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener() {
-				
-				@Override
-				public void onClick(View v)
-				{
-					// TODO Auto-generated method stub
-					NotifierService.getInstance().killAutoUpdater();
-					
-				}
-			}); */
-			MenuItem autorefresh = (MenuItem) myMenu.findItem(R.id.action_autorefresh);
-			autorefresh.setIcon(R.drawable.ic_menu_autorefresh_on);
+			autorefresh.setIcon(R.drawable.ic_menu_autorefresh_on); //set the icon of the button to reflect that it is updating
 			autorefresh.setOnMenuItemClickListener(new OnMenuItemClickListener() {
 				
 				@Override
 				public boolean onMenuItemClick(MenuItem item)
 				{
-					NotifierService.getInstance().killAutoUpdater();
+					NotifierService.getInstance().killAutoUpdater(); //make it so when the button is pressed, it kills the updater.
 					return false;
 				}
 			});
 		}
 		else
 		{
-			/*((Button)findViewById(R.id.delete_button)).setOnClickListener(new OnClickListener() {
-				
-				@Override
-				public void onClick(View v)
-				{
-					// TODO Auto-generated method stub
-					NotifierService.getInstance().launchAutoUpdater();
-				}
-			});*/
-			MenuItem autorefresh = (MenuItem) myMenu.findItem(R.id.action_autorefresh);
-			autorefresh.setIcon(R.drawable.ic_menu_autorefresh_off);
+			
+			autorefresh.setIcon(R.drawable.ic_menu_autorefresh_off); //set the icon of the button to appear stopped
 			autorefresh.setOnMenuItemClickListener(new OnMenuItemClickListener() {
 				
 				@Override
 				public boolean onMenuItemClick(MenuItem item)
 				{
-					NotifierService.getInstance().launchAutoUpdater();
+					NotifierService.getInstance().launchAutoUpdater(); //set the button to relaunch the auto-updater when the button is pressed
 					return false;
 				}
 			});
 			
 		}
 	}
-	
-	//Subclasses
-	
-	public void downloadHeads()
+	public void downloadHeads() //function to procedurally download and store all player heads
 	{
-		//Toast pToast = Toast.makeText(this, "Downloading heads. This may take a while...", Toast.LENGTH_SHORT);
-		//pToast.show();
 		Log.d("Heads", "DownloadHeads invoked.");
 		boolean headsHere=false;
-		for (Player p:players)
+		for (Player p:players) //iterate through all players
 		{
-			if(!hasHead(p))
+			if(!hasHead(p)) //if player's head file does not exist
 			{
-				headsHere=true;
-				new headDownloaderTask().execute(p);
+				headsHere=true; //indicate that the head is still downloading and not ready to be displayed
+				new headDownloaderTask().execute(p); //download and save the head
 				Log.d("Heads", "Downloading head for " + p.getName());
 			}
-			else
+			
+			if(!headsHere) //if the head is ready to be displayed
 			{
-				//Log.d("Heads","It thinks " + p.getName() + " has a head.");
-			}
-			if(!headsHere)
-			{
-				//pToast.cancel();
-				putHeadInPlayer(p);
-				playerAdapter.notifyDataSetChanged();
+				putHeadInPlayer(p); //generate the bitmap for this player
+				playerAdapter.notifyDataSetChanged(); //update the views
+				logEntryAdapter.notifyDataSetChanged();
 			}
 			try
 			{
@@ -335,7 +292,7 @@ public class MainActivity extends Activity
 		}
 		
 	}
-	public class headDownloaderTask extends AsyncTask <Player, Void, Player>
+	public class headDownloaderTask extends AsyncTask <Player, Void, Player> //task to download heads
 	{
 		
 		@Override
@@ -347,8 +304,8 @@ public class MainActivity extends Activity
 			}
 			Log.v("Heads","Head downloader task launched.");
 			boolean success=true;
-			HttpClient clientS = new DefaultHttpClient();
-			HttpClient clientB = new DefaultHttpClient();
+			HttpClient clientS = new DefaultHttpClient(); //HTTP client for small head (used in chat)
+			HttpClient clientB = new DefaultHttpClient(); //HTTP client for big head (used in online list/profile view)
 			Bitmap rawResponse = null;
 			int howManyPlayers=params.length;
 			int playerIndex = 0;
@@ -358,18 +315,18 @@ public class MainActivity extends Activity
 				HttpGet currentSmallHeadGet = new HttpGet(cPlayer.getSmallHeadURL().toString()); //get small head
 				try{
 					Log.v("Heads", "Getting heads for " + cPlayer.getName() + " (" + playerIndex + "/" + params.length + ")");
-					HttpResponse bigHeadResponse = clientB.execute(currentBigHeadGet);
+					HttpResponse bigHeadResponse = clientB.execute(currentBigHeadGet); //execute download for big head
 					Log.v("Heads", "Done getting " + cPlayer.getName() + "'s big head");
-					HttpResponse smallHeadResponse = clientS.execute(currentSmallHeadGet);
+					HttpResponse smallHeadResponse = clientS.execute(currentSmallHeadGet); //execute download for small head
 					Log.v("Heads", "Done getting " + cPlayer.getName() + "'s small head");
 					byte[] rawBigHead=EntityUtils.toByteArray(bigHeadResponse.getEntity());
 					byte[] rawSmallHead=EntityUtils.toByteArray(smallHeadResponse.getEntity());
 					FileOutputStream bigHeadOutStream = new FileOutputStream(
 							getCacheDir() + headDir + bigHeadSubDir + 
-							cPlayer.getName() + ".png");
+							cPlayer.getName() + ".png"); //write big head to file
 					FileOutputStream smallHeadOutStream = new FileOutputStream(
 							getCacheDir() + headDir + smallHeadSubDir + 
-							cPlayer.getName() + ".png");
+							cPlayer.getName() + ".png"); //write small head to file
 					bigHeadOutStream.write(rawBigHead);
 					smallHeadOutStream.write(rawSmallHead);
 					Log.v("Heads", "Saved " + cPlayer.getName() + "'s heads.");
@@ -395,11 +352,11 @@ public class MainActivity extends Activity
 		}
 		protected void onPostExecute(Player player)
 		{
-			putHeadInPlayer(player);
+			putHeadInPlayer(player); //assign a drawable resource for the head
 			playerAdapter.notifyDataSetChanged();
 		}
 	}
-	public void clearCache()
+	public void clearCache() //for future use, when a player's head is updated
 	{
 		for( File d:(((new File(getCacheDir().getAbsolutePath() + headDir +
 				smallHeadSubDir))).listFiles()))
@@ -413,7 +370,7 @@ public class MainActivity extends Activity
 		}
 		
 	}
-	public boolean hasHead(Player player)
+	public boolean hasHead(Player player) //does the player's head file exist?
 	{
 		File headFolder = new File(getCacheDir().getAbsolutePath() + headDir);
 		if (!headFolder.exists())
@@ -436,31 +393,35 @@ public class MainActivity extends Activity
 		File bigHead = new File(
 				getCacheDir().getAbsolutePath() + 
 				headDir + bigHeadSubDir + player.getName() + ".png");
-		return bigHead.exists()&&smallHead.exists();
+		
+		return (bigHead.exists()&&smallHead.exists());
+		
 		
 	}
-	public void putHeadInPlayer(Player player)
+	public void putHeadInPlayer(Player player) //create a bitmap for the player's head file and put it in their object.
 	{
-		if(hasHead(player))
+		if(hasHead(player)) //if the player's head files exist
 		{
 			Bitmap bigHeadBitmap = BitmapFactory.decodeFile(
 					getCacheDir().getAbsolutePath() +headDir+
-					bigHeadSubDir + player.getName() + ".png");
+					bigHeadSubDir + player.getName() + ".png"); //get displayable bitmaps from the files
 			
 			Bitmap smallHeadBitmap = BitmapFactory.decodeFile(
 					getCacheDir().getAbsolutePath() +headDir+
 					smallHeadSubDir + player.getName() + ".png");
 			
 			player.setBigHead(bigHeadBitmap);
-			player.setSmallHead(smallHeadBitmap);
+			player.setSmallHead(smallHeadBitmap); //put the bitmaps in the player object
 			
 		}
 	}
+	
 	@Override
 	public void onDestroy()
 	{
 		super.onDestroy();
 		unBindNotifierService();
+		Log.v("UI","MainActivity destroyed.");
 		notifierIsBound=false;
 	}
 }

@@ -12,6 +12,7 @@ import org.apache.http.util.EntityUtils;
 import android.app.Activity;
 import android.os.AsyncTask;
 import android.util.Log;
+import android.widget.Toast;
 
 public class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynchronous task to download XML from server
 {
@@ -53,6 +54,7 @@ public class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynch
 			ok=false;
 		}finally{
 			//Here because it doesn't work without it.
+			//ok=false;
 		}
 		if(ok) //if nothing bad happened
 		{
@@ -61,6 +63,7 @@ public class XmlDownloaderTask extends AsyncTask <String, Void, String> //asynch
 		else
 		{
 			Log.e("GET", "GET FAILED");
+			Toast.makeText(hostService.getBaseContext(), "Failed to download content! Check your internet connection", Toast.LENGTH_SHORT).show();
 		}
 		return strResponse;
 	}

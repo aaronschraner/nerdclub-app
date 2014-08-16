@@ -29,51 +29,52 @@ import android.widget.Toast;
 
 public class NotifierService extends Service
 {
-	private boolean mainActivityBound=false;
-	private static NotifierService sInstance;
-	private NotificationCompat.Builder notificationBuilder;
-	private static final int ONLINE_NOTIFY=311;
-	public static final int DELAY_REFRESH = 1000;
+	private boolean mainActivityBound=false; //true if an activity is bound.
+	private static NotifierService sInstance; //for external method access
+	private NotificationCompat.Builder notificationBuilder; //for notifications
+	private static final int ONLINE_NOTIFY=311; //for accessing the online notification
+	public static final int DELAY_REFRESH = 1000; 
 	public static final int MODE_CHAT=45; //mode for when parser is scanning chat entries
 	public static final int MODE_PLAYERS=46; //mode for when parser is scanning players
-	private static final int FLAG_SOUND_ONLY = 11;
 	private static final int FLAG_UPDATE_NORMAL = 15;
-	public static final int RINGTONE_LONG=320;
-	public static final int RINGTONE_SHORT=321;
+	public static final int RINGTONE_LONG=520;
+	public static final int RINGTONE_SHORT=521;
 	boolean notifierPlaying=false;
-	public List<Player> players = new ArrayList<Player>();
-	public List<LogEntry> logEntries = new ArrayList<LogEntry>();
+	public List<Player> players = new ArrayList<Player>(); //list of players
+	public List<LogEntry> logEntries = new ArrayList<LogEntry>(); //chat log
 	String sDataUrl="http://71.193.212.135/app/status.xml"; //URL to grab data from
 	static MediaPlayer mp;
-	boolean dirty=true;
-	Handler notificationHandler = new Handler();
-	Runnable notifierTask = new Runnable()
+	boolean dirty=true; //to help optimization
+	Handler notificationHandler = new Handler(); //used for notifications
+	Runnable notifierTask = new Runnable() //task to make notifications and autoupdate
 	{
 		@Override
 		public void run()
 		{
-			autoUpdateFunction();
+			autoUpdateFunction(); //do the auto-updating stuff
 			if(autoUpdate)
-				notificationHandler.postDelayed(notifierTask,DELAY_REFRESH);
+				notificationHandler.postDelayed(notifierTask,DELAY_REFRESH); //then do it again after a delay 
 		}
 	};
-	int cplaying=0;
+	int cplaying=0; //holds resource of current sound playing. 0 means not playing.
 	static boolean autoUpdate=true;
 	//End variables and constants
-	public void notifyOnline(Player player)
+	public void notifyOnline(Player player) //Launch a notification that someone has joined the server
 	{
+		Log.d("Notifier service", "Notifying that " + player.getName() + "is online."); //debug
 		notificationBuilder.setContentTitle(player.getName() + " joined the server!");
-		notificationBuilder.setContentText("Swipe away to silence.");
-		notificationBuilder.setLargeIcon(player.getBigHead());
-		Intent notifyIntent = new Intent(this,NotifierService.class);
-		PendingIntent notifyPendingIntent = PendingIntent.getActivity(this, 0, notifyIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-		notificationBuilder.setContentIntent(notifyPendingIntent);
-		notificationBuilder.setDeleteIntent(PendingIntent.getActivity(this,0,notifyIntent,PendingIntent.FLAG_CANCEL_CURRENT));
+		notificationBuilder.setContentText("Swipe away to silence."); //just kidding you can't.
+		notificationBuilder.setLargeIcon(player.getSmallHead()); //set icon to the head of the player who joined
+		Intent notifyIntent = new Intent(this,NotifierService.class); //intent to launch notifier
+		PendingIntent notifyPendingIntent = PendingIntent.getActivity(this, ONLINE_NOTIFY, notifyIntent, PendingIntent.FLAG_UPDATE_CURRENT); //more info for intent
+		notificationBuilder.setContentIntent(notifyPendingIntent); 
+		notificationBuilder.setDeleteIntent(PendingIntent.getActivity(this,ONLINE_NOTIFY,notifyIntent,PendingIntent.FLAG_CANCEL_CURRENT));
 		NotificationManager notificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
 		notificationManager.notify(ONLINE_NOTIFY,notificationBuilder.build());
 	}
-	public void notifyOnline()
+	public void notifyOnline() //just shows that the app is running
 	{
+		Log.d("Notifier service", "Notifying that app is launched");
 		notificationBuilder.setContentTitle("NCS Mobile running in background.");
 		notificationBuilder.setContentText("Players will appear here as they join.");
 		notificationBuilder.setSmallIcon(R.drawable.ic_launcher);
@@ -102,23 +103,18 @@ public class NotifierService extends Service
 			return NotifierService.this;
 		}
 	}
-	private static boolean cont=true;
-	public void autoRefresh() //NEEDS FIXING
-	{
-		//notificationHandler.postDelayed(notifierTask,DELAY_REFRESH);
-		mainActivityBound=true;
-	}
 	@Override
 	public void onCreate()
 	{
-		sInstance=this;
+		sInstance=this; //set static notifier instance
 		notificationBuilder = new NotificationCompat.Builder(this);
 		Log.v("Notifier service", "NotifierService onCreate called");
 		notifyOnline();
 		autoUpdate=true;
 		
 	}
-	public static NotifierService getInstance()
+
+	public static NotifierService getInstance() //accessor method for static notifier
 	{
 		return sInstance;
 	}
@@ -133,7 +129,7 @@ public class NotifierService extends Service
 		Intent killIntent = new Intent(this,NotifierService.class);
 		PendingIntent killPendingIntent = PendingIntent.getActivity(this, 0, killIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 		Log.v("Notifier service", "NotifierService killed");
-		Toast.makeText(this, "Fired intent to kill service", Toast.LENGTH_SHORT).show();
+		Toast.makeText(this, "Notifier service killed", Toast.LENGTH_SHORT).show();
 		
 	}
 	@Override
@@ -155,7 +151,6 @@ public class NotifierService extends Service
 	}
 	public void pushString(String string) //Called when GET thread completes, handles errors and publishes result
 	{
-		//Log.v("Notifier service", "pushString called");
 		if(string==null)
 		{
 			Toast.makeText(this, "Failed to fetch content", Toast.LENGTH_SHORT).show();
@@ -163,11 +158,8 @@ public class NotifierService extends Service
 		}
 		else if (!(string.equals(xmlText)))
 		{
-			//xmlToast.cancel();
-			//Toast.makeText(this, "Content loaded", Toast.LENGTH_SHORT).show();
 			Log.d("Notifier service", "Calling populateFields()");
 			populateFields(string);
-			//postXmlUpdateUI(FLAG_UPDATE_NORMAL);
 			if(mainActivityBound)
 				sendToMainActivity(players,logEntries, FLAG_UPDATE_NORMAL);
 			dirty=true;
@@ -175,7 +167,6 @@ public class NotifierService extends Service
 		else
 		{
 			Log.v("XML Parser", "No log updates.");
-			//sendToMainActivity(players,logEntries, FLAG_SOUND_ONLY);
 			dirty=false;
 		}
 		xmlText=string;
@@ -189,8 +180,7 @@ public class NotifierService extends Service
 		if(logEntries==null||players==null)
 		{
 			Log.w("Notifier service", "populateFields trying to clear null lists");
-			//xmlText=null;
-			//return;
+			
 		}
 		else
 		{
@@ -289,20 +279,16 @@ public class NotifierService extends Service
 	}
 	public void handleSounds(List<Player> players)
 	{
-		String playersOnlineStr="";
 		int playersOnline=0;
 		for (Player p:players)
 		{
 			if(p.isOnline())
 			{
 				playersOnline++;
-				if(playersOnline>1)
+				if(dirty&&false) //disabled for optimization
 				{
-					playersOnlineStr += ", ";
-					
+					notifyOnline(p);
 				}
-				playersOnlineStr += (p.getName());
-				notifyOnline(p);
 			}
 		}
 		if(playersOnline>0)
@@ -314,7 +300,7 @@ public class NotifierService extends Service
 				{
 					notifierPlaying=true;
 				}
-				playSound(RINGTONE_SHORT);
+				playSound(RINGTONE_SHORT); //short irritating notification sound
 			}
 			else
 			{
@@ -322,10 +308,10 @@ public class NotifierService extends Service
 				{
 					notifierPlaying=true;
 				}
-				playSound(RINGTONE_LONG);
+				playSound(RINGTONE_LONG); //much longer irritating notification sound
 			}
 		}
-		else
+		else //kill sound if nobody is online
 		{
 			notifierPlaying=false;
 			
@@ -344,7 +330,6 @@ public class NotifierService extends Service
 	public static class SoundPlayer
 	{
 		public static final int SS = R.raw.ringtone_cut;
-		//public static final int SL = R.raw.ringtone_extended;
 		private static SoundPool soundPool;
 		private static HashMap soundPoolMap;
 		public static void initSounds(Context context) 
@@ -352,7 +337,6 @@ public class NotifierService extends Service
 			soundPool = new SoundPool(2,AudioManager.STREAM_NOTIFICATION,100);
 			soundPoolMap = new HashMap(3);
 			soundPoolMap.put(SS, soundPool.load(context,R.raw.ringtone_cut,1));
-			//soundPoolMap.put(SL, soundPool.load(context,R.raw.ringtone_extended,2));
 			
 		}
 		public static void playSound()
@@ -408,23 +392,29 @@ public class NotifierService extends Service
 	{
 		Log.v("Notifier service", "Refreshing...");
 		getXmlFromServer();
-		if(dirty&&mainActivityBound)
+		if(dirty)
 		{
 			MainActivity.getInstance().setPlayersArray(players);
 			MainActivity.getInstance().setLogArray(logEntries);
 			MainActivity.getInstance().downloadHeads();
 		}
+		//else if(mainActivityBound)
+			//MainActivity.getInstance().downloadHeads();
 		handleSounds(players);
-		
+		testForPlayers();
 		
 	}
 	public void launchAutoUpdater()
 	{
 		autoUpdate=true;
 		Log.v("Notifier service","Auto-updater started");
+		
 		notifierTask.run();
 		if(mainActivityBound)
+		{
 			MainActivity.getInstance().setUIRefreshing(true);
+			MainActivity.getInstance().downloadHeads();
+		}
 		else
 			Log.d("Notifier service", "Tried to update nonexistent mainActivity");
 	}
